@@ -5,3 +5,4 @@ torch
 torchaudio
 torchvision
 ffmpeg-python
+firebase-admin

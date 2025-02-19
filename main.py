@@ -1,41 +1,71 @@
-from fastapi import FastAPI, UploadFile, Form
-import whisper # type: ignore
-import shutil
+import whisper
+import torch
 import os
+import firebase_admin
+from firebase_admin import credentials, firestore
+from fastapi import FastAPI, UploadFile, Form
+import uvicorn
+import shutil
 
+# ✅ Optimize GPU memory allocation
+torch.cuda.empty_cache()
+os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
+
+# ✅ Initialize Firebase
+if not firebase_admin._apps:
+    cred = credentials.Certificate("firebase-key.json")  # Update with your actual JSON key file
+    firebase_admin.initialize_app(cred)
+
+db = firestore.client()
+print("✅ Firebase connected successfully!")
+
+# ✅ Function to load the best model based on language
+def load_model(language):
+    if language == "it":
+        print("🔹 Loading Whisper Large v2 optimized for Italian...")
+        return whisper.load_model("large-v2", device="cuda")
+    else:
+        print(f"🔹 Loading Whisper Large for {language}...")
+        return whisper.load_model("large", device="cuda")
+
+# ✅ Initialize FastAPI
 app = FastAPI()
 
-# Predefined access codes (replace with database later)
-ACCESS_CODES = {"abc123", "test456", "demo789"}
-
-# Load Whisper Model
-model = whisper.load_model("small")  # Use "small" or "medium" for speed
-
-UPLOAD_FOLDER = "uploads"
-OUTPUT_FOLDER = "output"
-
-os.makedirs(UPLOAD_FOLDER, exist_ok=True)
-os.makedirs(OUTPUT_FOLDER, exist_ok=True)
-
-@app.post("/login")
-def login(code: str = Form(...)):
-    if code in ACCESS_CODES:
-        return {"status": "success", "message": "Access granted"}
-    return {"status": "error", "message": "Invalid code"}
-
 @app.post("/transcribe")
-async def transcribe(file: UploadFile):
-    file_path = os.path.join(UPLOAD_FOLDER, file.filename)
-    with open(file_path, "wb") as buffer:
-        shutil.copyfileobj(file.file, buffer)
+async def transcribe(file: UploadFile, language: str = Form("auto")):
+    """
+    ✅ API Endpoint to transcribe an audio file using Whisper and save it in Firebase.
+    """
+    try:
+        file_path = f"/tmp/{file.filename}"
 
-    # Transcribe the file
-    result = model.transcribe(file_path, language="it")
+        # 🔹 Save the uploaded file
+        with open(file_path, "wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
 
-    # Save transcription
-    output_path = os.path.join(OUTPUT_FOLDER, f"{file.filename}.txt")
-    with open(output_path, "w") as f:
-        f.write(result["text"])
+        # 🔹 Load the appropriate Whisper model
+        model = load_model(language)
 
-    os.remove(file_path)  # Cleanup after processing
-    return {"transcription": result["text"]}
+        # 🔹 Transcribe audio
+        result = model.transcribe(file_path, language=language)
+        output_text = result["text"]
+
+        # 🔹 Save the transcription in Firebase Firestore
+        db.collection("transcriptions").document(file.filename).set({
+            "text": output_text,
+            "language": language
+        })
+
+        # 🔹 Remove the file after processing
+        os.remove(file_path)
+
+        print(f"✅ Transcription saved successfully for {file.filename}.")
+        return {"transcription": output_text, "message": "Transcription saved successfully!"}
+
+    except Exception as e:
+        print(f"❌ Error transcribing {file.filename}: {str(e)}")
+        return {"error": str(e)}
+
+# ✅ Start FastAPI
+if __name__ == "__main__":
+    uvicorn.run(app, host="0.0.0.0", port=8000)
