@@ -3,7 +3,7 @@ import torch
 import os
 import firebase_admin
 from firebase_admin import credentials, firestore
-from fastapi import FastAPI, UploadFile, Form
+from fastapi import FastAPI, UploadFile, Form, HTTPException
 import uvicorn
 import shutil
 
@@ -19,6 +19,9 @@ if not firebase_admin._apps:
 db = firestore.client()
 print("✅ Firebase connected successfully!")
 
+# ✅ Predefined access codes
+ACCESS_CODES = {"abc123", "test456", "demo789"}  # Change or expand these
+
 # ✅ Function to load the best model based on language
 def load_model(language):
     if language == "it":
@@ -31,12 +34,23 @@ def load_model(language):
 # ✅ Initialize FastAPI
 app = FastAPI()
 
+@app.post("/login")
+def login(code: str = Form(...)):
+    """Validates the access code before allowing transcription."""
+    if code in ACCESS_CODES:
+        return {"status": "success", "message": "Access granted"}
+    raise HTTPException(status_code=403, detail="Invalid access code")
+
 @app.post("/transcribe")
-async def transcribe(file: UploadFile, language: str = Form("auto")):
+async def transcribe(file: UploadFile, language: str = Form("auto"), code: str = Form(...)):
     """
     ✅ API Endpoint to transcribe an audio file using Whisper and save it in Firebase.
     """
     try:
+        # 🔹 Validate access code
+        if code not in ACCESS_CODES:
+            raise HTTPException(status_code=403, detail="Invalid access code")
+
         file_path = f"/tmp/{file.filename}"
 
         # 🔹 Save the uploaded file
