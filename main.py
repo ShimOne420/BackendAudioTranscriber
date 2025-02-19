@@ -1,4 +1,3 @@
-import torch
 import os
 import firebase_admin
 from firebase_admin import credentials, firestore
@@ -6,29 +5,16 @@ from fastapi import FastAPI, UploadFile, Form, HTTPException
 import uvicorn
 import shutil
 
-# ✅ Optimize GPU memory allocation
-torch.cuda.empty_cache()
-os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
-
-# ✅ Initialize Firebase
+# ✅ Initialize Firebase (only if not already active)
 if not firebase_admin._apps:
-    cred = credentials.Certificate("firebase-key.json")  # Update with your actual JSON key file
+    cred = credentials.Certificate("firebase-key.json")  # Make sure this file exists on VM
     firebase_admin.initialize_app(cred)
 
 db = firestore.client()
 print("✅ Firebase connected successfully!")
 
-# ✅ Predefined access codes
-ACCESS_CODES = {"abc123", "test456", "demo789"}  # Change or expand these
-
-# ✅ Function to load the best model based on language
-def load_model(language):
-    if language == "it":
-        print("🔹 Loading Whisper Large v2 optimized for Italian...")
-        return whisper.load_model("large-v2", device="cuda")
-    else:
-        print(f"🔹 Loading Whisper Large for {language}...")
-        return whisper.load_model("large", device="cuda")
+# ✅ Predefined access codes for authentication
+ACCESS_CODES = {"abc123", "test456", "demo789"}  # Modify as needed
 
 # ✅ Initialize FastAPI
 app = FastAPI()
@@ -43,7 +29,8 @@ def login(code: str = Form(...)):
 @app.post("/transcribe")
 async def transcribe(file: UploadFile, language: str = Form("auto"), code: str = Form(...)):
     """
-    ✅ API Endpoint to transcribe an audio file using Whisper and save it in Firebase.
+    ✅ API Endpoint to store audio files and transcription results in Firebase.
+    The actual transcription happens in Google Colab.
     """
     try:
         # 🔹 Validate access code
@@ -56,29 +43,20 @@ async def transcribe(file: UploadFile, language: str = Form("auto"), code: str =
         with open(file_path, "wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
 
-        # 🔹 Load the appropriate Whisper model
-        model = load_model(language)
-
-        # 🔹 Transcribe audio
-        result = model.transcribe(file_path, language=language)
-        output_text = result["text"]
-
-        # 🔹 Save the transcription in Firebase Firestore
+        # 🔹 Store file metadata in Firebase (to trigger Colab processing)
         db.collection("transcriptions").document(file.filename).set({
-            "text": output_text,
-            "language": language
+            "status": "pending",
+            "language": language,
+            "file_path": file_path
         })
 
-        # 🔹 Remove the file after processing
-        os.remove(file_path)
-
-        print(f"✅ Transcription saved successfully for {file.filename}.")
-        return {"transcription": output_text, "message": "Transcription saved successfully!"}
+        print(f"✅ Audio file {file.filename} stored for processing.")
+        return {"message": "File uploaded successfully. Processing will start soon."}
 
     except Exception as e:
-        print(f"❌ Error transcribing {file.filename}: {str(e)}")
+        print(f"❌ Error storing file {file.filename}: {str(e)}")
         return {"error": str(e)}
 
-# ✅ Start FastAPI
+# ✅ Start FastAPI server
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8000)
