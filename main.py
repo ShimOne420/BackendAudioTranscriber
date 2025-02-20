@@ -19,6 +19,10 @@ ACCESS_CODES = {"abc123", "test456", "demo789"}  # Modify as needed
 # ✅ Initialize FastAPI
 app = FastAPI()
 
+@app.get("/")
+def root():
+    return {"message": "Server is running!"}
+
 @app.post("/login")
 def login(code: str = Form(...)):
     """Validates the access code before allowing transcription."""
