@@ -1,7 +1,8 @@
 import os
 import firebase_admin
 from firebase_admin import credentials, firestore
-from fastapi.middleware.cors import FastAPI, UploadFile, Form, HTTPException, CORSMiddleware
+from fastapi import FastAPI, UploadFile, Form, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
 import shutil
 
