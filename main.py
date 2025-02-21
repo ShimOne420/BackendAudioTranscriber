@@ -35,6 +35,8 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["*"],  # 🔹 Assicurati che gli headers siano visibili
+    max_age=600,  # 🔹 Mantiene la cache CORS per 10 minuti
 )
 
 @app.get("/")
