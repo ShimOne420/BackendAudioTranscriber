@@ -25,7 +25,7 @@ def root():
 
 @app.post("/login")
 def login(code: str = Form(...)):
-    """Validates the access code before allowing transcription."""
+    ACCESS_CODES = {"abc123", "test456", "demo789"}
     if code in ACCESS_CODES:
         return {"status": "success", "message": "Access granted"}
     raise HTTPException(status_code=403, detail="Invalid access code")
