@@ -23,7 +23,7 @@ app = FastAPI()
 # Configura CORS per permettere l'accesso dal frontend
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["https://frontend-3746xyhru-simones-projects-5e0d6eb3.vercel.app"],  # 🔥 Se vuoi limitare, metti l'URL del frontend
+    allow_origins=["*"],  # 🔥 Se vuoi limitare, metti l'URL del frontend
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
