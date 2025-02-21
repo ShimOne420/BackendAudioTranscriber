@@ -37,9 +37,20 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-@app.get("/")
-def root():
-    return {"message": "Server is running!"}
+@app.get("/progress")
+def get_progress(file: str):
+    """
+    ✅ Recupera il progresso della trascrizione in tempo reale.
+    """
+    doc = db.collection("transcriptions").document(file).get()
+    if not doc.exists:
+        return {"error": "File not found"}
+
+    data = doc.to_dict()
+    progress = data.get("progress", 0)  # Valore tra 0-100
+    text = data.get("text", "")
+
+    return {"progress": progress, "text": text}
 
 @app.post("/login")
 def login(code: str = Form(...)):
