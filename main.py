@@ -1,29 +1,37 @@
 import os
 import firebase_admin
+import requests
 from firebase_admin import credentials, firestore
 from fastapi import FastAPI, UploadFile, Form, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-import uvicorn
 import shutil
+import uvicorn
 
-# ✅ Initialize Firebase (only if not already active)
+# ✅ Inizializza Firebase solo se non già attivo
 if not firebase_admin._apps:
-    cred = credentials.Certificate("firebase-key.json")  # Make sure this file exists on VM
+    cred = credentials.Certificate("firebase-key.json")
     firebase_admin.initialize_app(cred)
 
 db = firestore.client()
 print("✅ Firebase connected successfully!")
 
-# ✅ Predefined access codes for authentication
-ACCESS_CODES = {"abc123", "test456", "demo789"}  # Modify as needed
+# ✅ Codici di accesso predefiniti per autenticazione
+ACCESS_CODES = {"abc123", "test456", "demo789"}
 
-# ✅ Initialize FastAPI
+def get_colab_url():
+    """✅ Recupera l'ultimo URL di Colab da Firebase"""
+    doc = db.collection("config").document("colab").get()
+    if doc.exists:
+        return doc.to_dict().get("url", None)
+    return None
+
+# ✅ Inizializza FastAPI
 app = FastAPI()
 
-# Configura CORS per permettere l'accesso dal frontend
+# ✅ Configura CORS per permettere l'accesso dal frontend
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # 🔥 Se vuoi limitare, metti l'URL del frontend
+    allow_origins=["*"], 
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -35,7 +43,7 @@ def root():
 
 @app.post("/login")
 def login(code: str = Form(...)):
-    ACCESS_CODES = {"abc123", "test456", "demo789"}
+    """✅ Valida il codice di accesso prima di permettere la trascrizione"""
     if code in ACCESS_CODES:
         return {"status": "success", "message": "Access granted"}
     raise HTTPException(status_code=403, detail="Invalid access code")
@@ -43,34 +51,52 @@ def login(code: str = Form(...)):
 @app.post("/transcribe")
 async def transcribe(file: UploadFile, language: str = Form("auto"), code: str = Form(...)):
     """
-    ✅ API Endpoint to store audio files and transcription results in Firebase.
-    The actual transcription happens in Google Colab.
+    ✅ API Endpoint per ricevere file audio e inviarli a Google Colab per la trascrizione.
+    La trascrizione avviene su Colab e viene poi salvata su Firebase.
     """
     try:
-        # 🔹 Validate access code
+        # 🔹 Verifica il codice di accesso
         if code not in ACCESS_CODES:
             raise HTTPException(status_code=403, detail="Invalid access code")
 
         file_path = f"/tmp/{file.filename}"
 
-        # 🔹 Save the uploaded file
+        # 🔹 Salva il file audio temporaneamente sulla VM
         with open(file_path, "wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
 
-        # 🔹 Store file metadata in Firebase (to trigger Colab processing)
-        db.collection("transcriptions").document(file.filename).set({
-            "status": "pending",
-            "language": language,
-            "file_path": file_path
-        })
+        # 🔹 Recupera l'URL aggiornato di Google Colab
+        colab_url = get_colab_url()
+        if not colab_url:
+            return {"error": "Colab URL not found. Try again later."}
 
-        print(f"✅ Audio file {file.filename} stored for processing.")
-        return {"message": "File uploaded successfully. Processing will start soon."}
+        # 🔹 Invia il file audio a Google Colab per la trascrizione
+        url = f"{colab_url}/transcribe"
+        files = {'file': open(file_path, 'rb')}
+        data = {'language': language}
+
+        response = requests.post(url, files=files, data=data)
+        result = response.json()
+
+        if "transcription" in result:
+            transcription = result["transcription"]
+
+            # 🔹 Salva la trascrizione su Firebase STRINGA PER STRINGA
+            transcription_ref = db.collection("transcriptions").document(file.filename)
+            old_data = transcription_ref.get()
+            old_text = old_data.to_dict().get("text", "") if old_data.exists else ""
+
+            updated_text = old_text + " " + transcription  # Continua la trascrizione
+            transcription_ref.set({"text": updated_text, "language": language})
+
+            return {"message": "Transcription saved successfully!", "transcription": updated_text}
+
+        return {"error": "Error processing transcription"}
 
     except Exception as e:
-        print(f"❌ Error storing file {file.filename}: {str(e)}")
+        print(f"❌ Error: {str(e)}")
         return {"error": str(e)}
 
-# ✅ Start FastAPI server
+# ✅ Avvia il server FastAPI
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8000)
