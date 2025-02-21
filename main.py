@@ -37,6 +37,11 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+@app.get("/")
+def root():
+    return {"message": "Server is running!"}
+
+
 @app.get("/progress")
 def get_progress(file: str):
     """
