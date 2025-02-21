@@ -2,6 +2,7 @@ import os
 import firebase_admin
 from firebase_admin import credentials, firestore
 from fastapi import FastAPI, UploadFile, Form, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
 import shutil
 
@@ -18,6 +19,15 @@ ACCESS_CODES = {"abc123", "test456", "demo789"}  # Modify as needed
 
 # ✅ Initialize FastAPI
 app = FastAPI()
+
+# Configura CORS per permettere l'accesso dal frontend
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["https://frontend-3746xyhru-simones-projects-5e0d6eb3.vercel.app/"],  # 🔥 Se vuoi limitare, metti l'URL del frontend
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 @app.get("/")
 def root():
