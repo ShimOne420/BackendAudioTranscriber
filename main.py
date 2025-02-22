@@ -31,7 +31,7 @@ app = FastAPI()
 # ✅ Configura CORS per permettere l'accesso dal frontend
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"], 
+    allow_origins=["https://frontend-eight-puce-41.vercel.app", "https://audiototext.duckdns.org"] 
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
