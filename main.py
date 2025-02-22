@@ -19,20 +19,19 @@ print("✅ Firebase connected successfully!")
 ACCESS_CODES = {"abc123", "test456", "demo789"}
 
 def get_colab_url():
-    """✅ Recupera l'ultimo URL di Colab da Firebase"""
+    """✅ Recupera l'ultimo URL di Colab da Firebase, se non esiste restituisce None."""
     doc = db.collection("config").document("colab").get()
     if doc.exists:
         return doc.to_dict().get("url", None)
     return None
 
-# ✅ Inizializza FastAPI
+# ✅ Configura FastAPI
 app = FastAPI()
-
 
 # ✅ Configura CORS per permettere l'accesso dal frontend
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["https://frontend-eight-puce-41.vercel.app/  ", "https://frontend-simones-projects-5e0d6eb3.vercel.app/"], 
+    allow_origins=["https://frontend-eight-puce-41.vercel.app", "https://frontend-simones-projects-5e0d6eb3.vercel.app"], 
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -44,12 +43,9 @@ app.add_middleware(
 def root():
     return {"message": "Server is running!"}
 
-
 @app.get("/progress")
 def get_progress(file: str):
-    """
-    ✅ Recupera il progresso della trascrizione in tempo reale.
-    """
+    """✅ Recupera il progresso della trascrizione in tempo reale."""
     doc = db.collection("transcriptions").document(file).get()
     if not doc.exists:
         return {"error": "File not found"}
@@ -103,25 +99,28 @@ async def transcribe(file: UploadFile, language: str = Form("auto"), code: str =
 
         # 🔹 Invia il file audio a Google Colab per la trascrizione
         url = f"{colab_url}/transcribe"
-        files = {'file': open(file_path, 'rb')}
-        data = {'language': language}
+        with open(file_path, 'rb') as audio_file:
+            files = {'file': audio_file}
+            data = {'language': language}
 
-        response = requests.post(url, files=files, data=data)
+            response = requests.post(url, files=files, data=data)
 
         print(f"📌 Risposta da Colab ricevuta, codice {response.status_code}")
 
+        # ✅ Se Colab risponde con errore, stampalo in console e ritorna un messaggio chiaro
         if response.status_code != 200:
             print(f"❌ Errore da Colab: {response.text}")
-            return {"error": "Colab returned an error"}
+            return {"error": f"Colab returned an error: {response.status_code}"}
 
         result = response.json()
 
         print("📄 JSON ricevuto da Colab:", result)
 
+        # ✅ Se la trascrizione è presente nel JSON di risposta, la salviamo in Firebase
         if "transcription" in result:
             transcription = result["transcription"]
 
-            # 🔹 Salva la trascrizione su Firebase STRINGA PER STRINGA
+            # 🔹 Salva la trascrizione su Firebase
             transcription_ref = db.collection("transcriptions").document(file.filename)
             old_data = transcription_ref.get()
             old_text = old_data.to_dict().get("text", "") if old_data.exists else ""
@@ -136,11 +135,15 @@ async def transcribe(file: UploadFile, language: str = Form("auto"), code: str =
         print("❌ Errore: Nessuna trascrizione trovata nel JSON")
         return {"error": "Error processing transcription"}
 
+    except requests.exceptions.RequestException as e:
+        print(f"❌ Errore di connessione con Colab: {str(e)}")
+        return {"error": "Failed to connect to Colab"}
+
     except Exception as e:
         print(f"❌ Error: {str(e)}")
         return {"error": str(e)}
     
     
-# ✅ Avvia il server FastAPI
+# ✅ Avvia il server FastAPI sulla VM (porta 8000)
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8000)
