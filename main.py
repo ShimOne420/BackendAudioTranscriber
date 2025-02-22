@@ -28,6 +28,7 @@ def get_colab_url():
 # ✅ Inizializza FastAPI
 app = FastAPI()
 
+
 # ✅ Configura CORS per permettere l'accesso dal frontend
 app.add_middleware(
     CORSMiddleware,
@@ -77,16 +78,28 @@ async def transcribe(file: UploadFile, language: str = Form("auto"), code: str =
         if code not in ACCESS_CODES:
             raise HTTPException(status_code=403, detail="Invalid access code")
 
+        print(f"📥 Ricevuto file: {file.filename}")
+
         file_path = f"/tmp/{file.filename}"
 
         # 🔹 Salva il file audio temporaneamente sulla VM
         with open(file_path, "wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
 
+        print(f"✅ File salvato correttamente in: {file_path}")
+
+        # 🔹 Verifica se il file è stato salvato correttamente
+        if not os.path.exists(file_path):
+            print(f"❌ Errore: il file non è stato salvato!")
+            return {"error": "File not saved"}
+
         # 🔹 Recupera l'URL aggiornato di Google Colab
         colab_url = get_colab_url()
         if not colab_url:
+            print("❌ Errore: Colab URL non trovato!")
             return {"error": "Colab URL not found. Try again later."}
+
+        print(f"🚀 Inviando file a Colab: {colab_url}")
 
         # 🔹 Invia il file audio a Google Colab per la trascrizione
         url = f"{colab_url}/transcribe"
@@ -94,7 +107,16 @@ async def transcribe(file: UploadFile, language: str = Form("auto"), code: str =
         data = {'language': language}
 
         response = requests.post(url, files=files, data=data)
+
+        print(f"📌 Risposta da Colab ricevuta, codice {response.status_code}")
+
+        if response.status_code != 200:
+            print(f"❌ Errore da Colab: {response.text}")
+            return {"error": "Colab returned an error"}
+
         result = response.json()
+
+        print("📄 JSON ricevuto da Colab:", result)
 
         if "transcription" in result:
             transcription = result["transcription"]
@@ -107,14 +129,18 @@ async def transcribe(file: UploadFile, language: str = Form("auto"), code: str =
             updated_text = old_text + " " + transcription  # Continua la trascrizione
             transcription_ref.set({"text": updated_text, "language": language})
 
+            print(f"✅ Trascrizione salvata con successo per {file.filename}")
+
             return {"message": "Transcription saved successfully!", "transcription": updated_text}
 
+        print("❌ Errore: Nessuna trascrizione trovata nel JSON")
         return {"error": "Error processing transcription"}
 
     except Exception as e:
         print(f"❌ Error: {str(e)}")
         return {"error": str(e)}
-
+    
+    
 # ✅ Avvia il server FastAPI
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8000)
