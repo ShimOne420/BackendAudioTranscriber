@@ -31,10 +31,11 @@ app = FastAPI()
 # ✅ Configura CORS per permettere l'accesso dal frontend
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["https://frontend-eight-puce-41.vercel.app"],  # 🔹 Metti SOLO il dominio frontend esatto
+    allow_origins=["https://frontend-eight-puce-41.vercel.app"],  # 🔹 SOLO un valore qui!
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"]
+    allow_methods=["GET", "POST"],
+    allow_headers=["Content-Type", "Authorization"],
+    expose_headers=["Content-Type", "Authorization"]  # 🔹 Espone correttamente gli header necessari
 )
 
 @app.get("/")
