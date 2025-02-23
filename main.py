@@ -28,19 +28,18 @@ def get_colab_url():
 # ✅ Configura FastAPI
 app = FastAPI()
 
-# ✅ Lista dei domini autorizzati
+# ✅ Lista dei domini autorizzati (solo uno)
 ALLOWED_ORIGINS = [
-    "https://frontend-eight-puce-41.vercel.app",
-    "https://frontend-simones-projects-5e0d6eb3.vercel.app"
+    "https://frontend-eight-puce-41.vercel.app"
 ]
 
-# ✅ Configura CORS per permettere SOLO l'accesso dai frontend autorizzati
+# ✅ Configura CORS per permettere SOLO l'accesso dal frontend autorizzato
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=ALLOWED_ORIGINS,  # 🔹 Specifica solo i domini necessari
+    allow_origins=ALLOWED_ORIGINS,  # 🔹 Solo il dominio richiesto
     allow_credentials=True,
-    allow_methods=["GET", "POST"],  # 🔹 Permetti solo i metodi che servono
-    allow_headers=["Content-Type", "Authorization"],  # 🔹 Solo gli header necessari
+    allow_methods=["GET", "POST", "OPTIONS", "DELETE", "PUT"],  # 🔹 Stessi metodi di Nginx
+    allow_headers=["Content-Type", "Authorization"],  # 🔹 Stessi header di Nginx
     expose_headers=["Content-Type", "Authorization"]
 )
 
