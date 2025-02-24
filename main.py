@@ -1,7 +1,7 @@
 import os
 import firebase_admin
 import requests
-from firebase_admin import credentials, firestore
+from firebase_admin import credentials, firestore, storage
 from fastapi import FastAPI, UploadFile, Form, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 import shutil
@@ -10,9 +10,10 @@ import uvicorn
 # ✅ Inizializza Firebase solo se non già attivo
 if not firebase_admin._apps:
     cred = credentials.Certificate("firebase-key.json")
-    firebase_admin.initialize_app(cred)
+    firebase_admin.initialize_app(cred, {"storageBucket": "tuo-bucket.appspot.com"})
 
 db = firestore.client()
+bucket = storage.bucket()
 print("✅ Firebase connected successfully!")
 
 # ✅ Codici di accesso predefiniti per autenticazione
@@ -89,21 +90,25 @@ async def transcribe(file: UploadFile, language: str = Form("auto"), code: str =
             print(f"❌ Errore: il file salvato è vuoto!")
             return {"error": "Uploaded file is empty"}
 
+        # ✅ Carica il file su Firebase Storage
+        blob = bucket.blob(f"audio/{file.filename}")
+        blob.upload_from_filename(file_path)
+        blob.make_public()
+        file_url = blob.public_url
+
+        print(f"✅ File caricato su Firebase Storage: {file_url}")
+
         # 🔹 Recupera l'URL aggiornato di Google Colab
         colab_url = get_colab_url()
         if not colab_url:
             print("❌ Errore: Colab URL non trovato!")
             return {"error": "Colab URL not found. Try again later."}
 
-        print(f"🚀 Inviando file a Colab: {colab_url}")
+        print(f"🚀 Inviando URL del file a Colab: {colab_url}")
 
-        # 🔹 Invia il file audio a Google Colab per la trascrizione
+        # 🔹 Invia solo il link del file a Colab
         url = f"{colab_url}/transcribe"
-        with open(file_path, 'rb') as audio_file:
-            files = {'file': audio_file}
-            data = {'language': language}
-
-            response = requests.post(url, files=files, data=data)
+        response = requests.post(url, data={"file_url": file_url, "language": language}, timeout=600)
 
         print(f"📌 Risposta da Colab ricevuta, codice {response.status_code}")
 
