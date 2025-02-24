@@ -123,16 +123,20 @@ async def transcribe(file: UploadFile, language: str = Form("auto"), code: str =
         print(f"❌ Error: {str(e)}")
         return {"error": str(e)}
 
-@app.get("/get_transcription")
-def get_transcription(filename: str):
+@app.get("/get_live_transcription")
+def get_live_transcription(filename: str):
     """
-    ✅ Recupera la trascrizione di un file specifico da Firebase.
+    ✅ Recupera la trascrizione live aggiornata da Firebase.
     """
     doc = db.collection("transcriptions").document(filename).get()
     if not doc.exists:
         return {"error": "Transcription not found"}
 
-    return doc.to_dict()
+    data = doc.to_dict()
+    text = data.get("text", "")
+    progress = data.get("progress", 0)
+
+    return {"progress": progress, "text": text}
 
 # ✅ Avvia il server FastAPI sulla VM (porta 8000)
 if __name__ == "__main__":
