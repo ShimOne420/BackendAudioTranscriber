@@ -150,7 +150,7 @@ def get_transcription(filename: str):
     ✅ Recupera la trascrizione di un file specifico da Firebase.
     """
     doc = db.collection("transcriptions").document(filename).get()
-    if not doc.exists():
+    if not doc.exists:  # ✅ Corretto: non è una funzione
         return {"error": "Transcription not found"}
 
     return doc.to_dict()
