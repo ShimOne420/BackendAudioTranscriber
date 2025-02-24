@@ -28,11 +28,9 @@ def get_colab_url():
 # ✅ Configura FastAPI
 app = FastAPI()
 
-# ✅ Rimuovi completamente la gestione di CORS in FastAPI
-# perché lo gestisce già Nginx
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[],  # 🔹 Vuoto per evitare duplicazioni
+    allow_origins=[],
     allow_credentials=True,
     allow_methods=["GET", "POST", "OPTIONS", "DELETE", "PUT"],
     allow_headers=["Content-Type", "Authorization"]
@@ -41,26 +39,6 @@ app.add_middleware(
 @app.get("/")
 def root():
     return {"message": "Server is running!"}
-
-@app.get("/progress")
-def get_progress(file: str):
-    """✅ Recupera il progresso della trascrizione in tempo reale."""
-    doc = db.collection("transcriptions").document(file).get()
-    if not doc.exists:
-        return {"error": "File not found"}
-
-    data = doc.to_dict()
-    progress = data.get("progress", 0)  # Valore tra 0-100
-    text = data.get("text", "")
-
-    return {"progress": progress, "text": text}
-
-@app.post("/login")
-def login(code: str = Form(...)):
-    """✅ Valida il codice di accesso prima di permettere la trascrizione"""
-    if code in ACCESS_CODES:
-        return {"status": "success", "message": "Access granted"}
-    raise HTTPException(status_code=403, detail="Invalid access code")
 
 @app.post("/transcribe")
 async def transcribe(file: UploadFile, language: str = Form("auto"), code: str = Form(...)):
@@ -88,13 +66,23 @@ async def transcribe(file: UploadFile, language: str = Form("auto"), code: str =
             print(f"❌ Errore: il file non è stato salvato!")
             return {"error": "File not saved"}
 
+        # 🔹 Verifica se il file ha dimensione maggiore di 0 bytes
+        file_size = os.path.getsize(file_path)
+        print(f"📏 Dimensione file salvato: {file_size} bytes")
+
+        if file_size == 0:
+            print(f"❌ Errore: il file salvato è vuoto!")
+            return {"error": "Uploaded file is empty"}
+
         # 🔹 Recupera l'URL aggiornato di Google Colab
         colab_url = get_colab_url()
+        print(f"📡 Colab URL recuperato da Firebase: {colab_url}")
+
         if not colab_url:
             print("❌ Errore: Colab URL non trovato!")
             return {"error": "Colab URL not found. Try again later."}
 
-        print(f"🚀 Inviando file a Colab: {colab_url}")
+        print(f"🚀 Inoltrando file a {colab_url}/transcribe, dimensione {file_size} bytes")
 
         # 🔹 Invia il file audio a Google Colab per la trascrizione
         url = f"{colab_url}/transcribe"
@@ -106,16 +94,13 @@ async def transcribe(file: UploadFile, language: str = Form("auto"), code: str =
 
         print(f"📌 Risposta da Colab ricevuta, codice {response.status_code}")
 
-        # ✅ Se Colab risponde con errore, stampalo in console e ritorna un messaggio chiaro
         if response.status_code != 200:
             print(f"❌ Errore da Colab: {response.text}")
             return {"error": f"Colab returned an error: {response.status_code}"}
 
         result = response.json()
-
         print("📄 JSON ricevuto da Colab:", result)
 
-        # ✅ Se la trascrizione è presente nel JSON di risposta, la salviamo in Firebase
         if "transcription" in result:
             transcription = result["transcription"]
 
@@ -141,8 +126,6 @@ async def transcribe(file: UploadFile, language: str = Form("auto"), code: str =
     except Exception as e:
         print(f"❌ Error: {str(e)}")
         return {"error": str(e)}
-    
-    
-# ✅ Avvia il server FastAPI sulla VM (porta 8000)
+
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8000)
