@@ -24,7 +24,7 @@ def get_colab_url():
     if doc.exists:
         return doc.to_dict().get("url", None)
     return None
-
+    
 # ✅ Configura FastAPI
 app = FastAPI()
 
@@ -85,19 +85,6 @@ async def transcribe(file: UploadFile, language: str = Form("auto"), code: str =
 
         print(f"✅ File salvato correttamente in: {file_path}")
 
-        # 🔹 Verifica se il file è stato salvato correttamente
-        if not os.path.exists(file_path):
-            print(f"❌ Errore: il file non è stato salvato!")
-            return {"error": "File not saved"}
-        
-        # 🔹 Verifica se il file ha dimensione maggiore di 0 bytes
-        file_size = os.path.getsize(file_path)
-        print(f"📏 Dimensione file salvato: {file_size} bytes")
-
-        if file_size == 0:
-            print(f"❌ Errore: il file salvato è vuoto!")
-            return {"error": "Uploaded file is empty"}
-
         # 🔹 Recupera l'URL aggiornato di Google Colab
         colab_url = get_colab_url()
         if not colab_url:
@@ -122,7 +109,6 @@ async def transcribe(file: UploadFile, language: str = Form("auto"), code: str =
             return {"error": f"Colab returned an error: {response.status_code}"}
 
         result = response.json()
-
         print("📄 JSON ricevuto da Colab:", result)
 
         # ✅ Se la trascrizione è presente nel JSON di risposta, la salviamo in Firebase
@@ -131,15 +117,15 @@ async def transcribe(file: UploadFile, language: str = Form("auto"), code: str =
 
             # 🔹 Salva la trascrizione su Firebase
             transcription_ref = db.collection("transcriptions").document(file.filename)
-            old_data = transcription_ref.get()
-            old_text = old_data.to_dict().get("text", "") if old_data.exists else ""
-
-            updated_text = old_text + " " + transcription  # Continua la trascrizione
-            transcription_ref.set({"text": updated_text, "language": language})
+            transcription_ref.set({
+                "text": transcription,
+                "language": language,
+                "filename": file.filename
+            })
 
             print(f"✅ Trascrizione salvata con successo per {file.filename}")
 
-            return {"message": "Transcription saved successfully!", "transcription": updated_text}
+            return {"message": "Transcription saved successfully!", "transcription": transcription}
 
         print("❌ Errore: Nessuna trascrizione trovata nel JSON")
         return {"error": "Error processing transcription"}
