@@ -24,7 +24,7 @@ def get_colab_url():
     if doc.exists:
         return doc.to_dict().get("url", None)
     return None
-    
+
 # ✅ Configura FastAPI
 app = FastAPI()
 
@@ -62,8 +62,6 @@ def get_progress(file: str):
 
     return {"progress": progress, "text": text}
 
-
-
 @app.post("/transcribe")
 async def transcribe(file: UploadFile, language: str = Form("auto"), code: str = Form(...)):
     """
@@ -84,6 +82,12 @@ async def transcribe(file: UploadFile, language: str = Form("auto"), code: str =
             shutil.copyfileobj(file.file, buffer)
 
         print(f"✅ File salvato correttamente in: {file_path}")
+
+        # 🔹 Verifica se il file ha dimensione maggiore di 0 bytes
+        file_size = os.path.getsize(file_path)
+        if file_size == 0:
+            print(f"❌ Errore: il file salvato è vuoto!")
+            return {"error": "Uploaded file is empty"}
 
         # 🔹 Recupera l'URL aggiornato di Google Colab
         colab_url = get_colab_url()
@@ -109,6 +113,7 @@ async def transcribe(file: UploadFile, language: str = Form("auto"), code: str =
             return {"error": f"Colab returned an error: {response.status_code}"}
 
         result = response.json()
+
         print("📄 JSON ricevuto da Colab:", result)
 
         # ✅ Se la trascrizione è presente nel JSON di risposta, la salviamo in Firebase
@@ -137,7 +142,17 @@ async def transcribe(file: UploadFile, language: str = Form("auto"), code: str =
     except Exception as e:
         print(f"❌ Error: {str(e)}")
         return {"error": str(e)}
-    
+
+@app.get("/get_transcription")
+def get_transcription(filename: str):
+    """
+    ✅ Recupera la trascrizione di un file specifico da Firebase.
+    """
+    doc = db.collection("transcriptions").document(filename).get()
+    if not doc.exists():
+        return {"error": "Transcription not found"}
+
+    return doc.to_dict()
     
 # ✅ Avvia il server FastAPI sulla VM (porta 8000)
 if __name__ == "__main__":
