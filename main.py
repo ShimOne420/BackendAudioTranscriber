@@ -125,7 +125,8 @@ async def transcribe(file: UploadFile, language: str = Form("auto"), code: str =
             transcription_ref.set({
                 "text": transcription,
                 "language": language,
-                "filename": file.filename
+                "filename": file.filename,
+                "progress": 100
             })
 
             print(f"✅ Trascrizione salvata con successo per {file.filename}")
